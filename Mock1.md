@@ -704,13 +704,13 @@ metadata:
     name: dev-user-access
     namespace: dev-z
 rules:
-- apiGroups:
-- ""
+  - apiGroups:
+    - ""
     resources:
-- pods
+    - pods
     verbs:
-- get
-- list
+    - get
+    - list
 ```
 
 ## 15. Auditing Configuration
@@ -725,21 +725,21 @@ First complete the `/etc/kubernetes/cluster-policy.yaml`:
 apiVersion: audit.k8s.io/v1
 kind: Policy
 omitStages:
-- "RequestReceived"
+  - "RequestReceived"
 rules:
-- level: Metadata
+  - level: Metadata
     verbs: ["delete"]
     resources:
-- group: ""
+      - group: ""
         resources: ["secrets"]
     namespaces: ["kube-system"]
-- level: Request
+  - level: Request
     verbs: ["create", "update", "patch", "delete"]
     resources:
-- group: "apps"
+      - group: "apps"
         resources: ["deployments"]
     namespaces: ["default"]
-- level: Metadata
+  - level: Metadata
 ```
 
 Then add/modify the properties in the `vi /etc/kubernetes/manifests/kube-apiserver.yaml` file. First add these flags:
