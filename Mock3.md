@@ -248,8 +248,9 @@ spec:
 
 ### 📘 Question
 
-Create pod `audit-nginx` using a custom seccomp profile `audit.json`.
+Create a new pod called audit-nginx in the default namespace using the nginx image. Secure the syscalls that this pod can use by using the audit.json seccomp profile in the pod's security context.
 
+The audit.json file is located in the /root/CKS directory. Before creating the pod, move it to the profiles directory inside the default seccomp directory.
 ---
 
 ### ✅ Solution
@@ -279,7 +280,15 @@ spec:
 
 ### 📘 Question
 
-Deploy ImagePolicyWebhook with **implicit deny** if webhook is unreachable.
+We want to deploy an ImagePolicyWebhook admission controller to secure the deployments in our cluster.
+
+Fix the error in /etc/kubernetes/pki/admission_configuration.yaml which will be used by ImagePolicyWebhook
+
+Ensure that the policy is set to implicit deny. If the webhook service is not reachable, the configuration should automatically reject all images.
+
+Enable the plugin on the API server.
+
+The kubeconfig file for the existing imagepolicywebhook resources is located at /etc/kubernetes/pki/admission_kube_config.yaml
 
 ---
 
@@ -316,8 +325,9 @@ Delete all pods in `alpha` namespace that are **not immutable**.
 
 ### ✅ Solution
 
-* ❌ Delete: `sonata`, `triton`
-* ✅ Keep: `solaris`
+Pod solaris is immutable as it have readOnlyRootFilesystem: true so it should not be deleted.
+
+Pod sonata is running with privileged: true and triton doesn't define readOnlyRootFilesystem: true so both break the concept of immutability and should be deleted.
 
 ---
 
@@ -346,14 +356,38 @@ Your task is to disable or unexpose ports to minimize external access to unneces
 
 ### ✅ Solution
 
-```yaml
-type: ClusterIP
-```
+We will change the nginx-external-service to be only accessible within the cluster by changing its service type to ClusterIP.
 
-```bash
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-external-service
+  namespace: system-hardening
+spec:
+  selector:
+    app: nginx-external
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 443
+  type: ClusterIP
+
+Save it as nginx-external-service-clusterip.yaml.
+
+Apply the change:
+
 kubectl replace -f nginx-external-service-clusterip.yaml
-kubectl delete svc nginx-internal-service -n system-hardening
-```
+
+If we don't need the internal service exposed anymore (or it's for testing purposes), we can delete it.
+
+kubectl -n system-hardening delete svc nginx-internal-service
+
+This will stop the internal service from being available. However, you could also leave it as-is if you want to keep testing internal services.
 
 ---
 
@@ -370,15 +404,62 @@ Identify why the deployment is not in a running state, and then fix the issue so
 
 ### ✅ Solution
 
-```yaml
+First check the status of the web-server deployment:
+
+kubectl get deployments.apps -n restricted 
+
+You should see the READY column showing 0/1 which means the pod is not running.
+
+Then run the following command:
+
+kubectl describe deployments.apps web-server -n restricted 
+
+In the output, check the Conditions section:
+
+Conditions:
+  Type             Status  Reason
+  ----             ------  ------
+  Progressing      True    NewReplicaSetCreated
+  Available        False   MinimumReplicasUnavailable
+  ReplicaFailure   True    FailedCreate
+
+This shows that the replica creation failed. Lets find out the reason why:
+
+kubectl describe replicaset -n restricted
+
+The Events section will provide the exact error cause:
+
+  Warning  FailedCreate  25s (x6 over 105s)  replicaset-controller  (combined from similar events): Error creating: pods "web-server-7d8b84ccc8-9ppsm" is forbidden: violates PodSecurity "restricted:latest": allowPrivilegeEscalation != false (container "nginx" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "nginx" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "nginx" must set securityContext.runAsNonRoot=true), runAsUser=0 (container "nginx" must not set runAsUser=0), seccompProfile (pod or container "nginx" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
+
+This confirms the pod was blocked by Pod Security Admission (PSA) because it doesn't meet the restricted security policy.
+Now, check that the namespace is labeled to enforce the restricted policy:
+
+kubectl get namespace restricted --show-labels
+
+You should see this label present: pod-security.kubernetes.io/enforce=restricted which means kubernetes is actively enforcing restricted-level pod Security in this namespace.
+
+According to the Events section of the replicaset, we need to make some changes in our deployment's securityContext section. Open the deployment file to edit:
+
+kubectl edit deployment web-server -n restricted
+
+Enter insert mode by typing i and change the securityContext section under spec.containers as follows:
+
 securityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop: ["ALL"]
-  runAsNonRoot: true
-  seccompProfile:
-    type: RuntimeDefault
-```
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+Also, remove runAsUser: 0 and then press Esc followed by :wq!. This will save the changes.
+
+You should then see the pod in a running state:
+
+kubectl get pods -n restricted 
+NAME                          READY   STATUS    RESTARTS   AGE
+web-server-55549f978f-lgp8w   1/1     Running   0          5m
 
 ---
 
@@ -400,18 +481,39 @@ Ensure that, from the node, the cluster cannot be accessed with kubectl unless t
 
 ### ✅ Solution
 
-```yaml
+First ssh to cluster2-controlplane cluster:
+
+ssh cluster2-controlplane
+
+Then. open the kubelet config file to edit:
+
+sudo nano /var/lib/kubelet/config.yaml
+
+and change the authentication.anonymous.enabled to false:
+
 authentication:
   anonymous:
     enabled: false
+
+and authorization.mode to Webhook:
+
 authorization:
   mode: Webhook
-```
 
-```bash
+Save and exit the file and then restart the kubelet:
+
 sudo systemctl restart kubelet
+
+To make the cluster info inaccessible without the kubeconfig flag:
+
+mv ~/.kube/config ~/.kube/config.bak
+unset KUBECONFIG
+
+The kubernetes commands should then not work without using --kubeconfig=/root/custom-config/admin.conf.
+
+Now delete the custom-role using this kubeconfig file:
+
 kubectl delete role custom-role -n delta --kubeconfig=/root/custom-config/admin.conf
-```
 
 ---
 
@@ -449,16 +551,52 @@ Utilize the TLS certificate stored in the secret rocket-tls in the space namespa
 
 ### ✅ Solution
 
-```yaml
-tls:
-  - hosts:
-      - rocket-server.local
-    secretName: rocket-tls
-```
+Run the command:
 
-```bash
+k describe deployment rocket-server -n space
+
+and check the Port field under Pod Template -> Containers.
+
+Then create and apply the following ingress yaml file:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rocket-ingress
+  namespace: space
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - rocket-server.local
+      secretName: rocket-tls
+  rules:
+    - host: rocket-server.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rocket-server
+                port:
+                  number: 80
+
+Once that is done, check the IP address under CLUSTER-IP header of the ingress-nginx-controller:
+
+kubectl get svc -n ingress-nginx
+
+Then add this IP to the /etc/hosts file:
+
+echo "<INGRESS-IP> rocket-server.local" | sudo tee -a /etc/hosts
+
+Finally you can check the working:
+
 curl -k https://rocket-server.local
-```
+
+You should the nginx welcome page.
 
 ---
 
@@ -476,9 +614,32 @@ Attach this secret as a volume named secret-volume in the deployment code-server
 
 ### ✅ Solution
 
+First create the TLS secret:
+
 ```bash
 kubectl create secret tls code-secret --cert=/root/custom-cert.crt --key=/root/custom-key.key -n code
 ```
+
+
+Then edit the deployment to mount the secret:
+
+kubectl edit deployment code-server -n code
+
+Under the spec.template.spec section, add:
+
+volumes:
+  - name: secret-volume
+    secret:
+      secretName: code-secret
+
+Under the spec.template.spec.containers section, add the volume mount then:
+
+volumeMounts:
+  - name: secret-volume
+    mountPath: /etc/code/tls
+    readOnly: true
+
+Save and exit the deployment.
 
 ---
 
@@ -500,8 +661,22 @@ The current setup is too permissive and does not meet the above condition. Updat
 
 ### ✅ Solution
 
+The role called dev-user-access has been created for all three namespaces: dev-a, dev-b and dev-z. However, the role in the dev-z namespace grants jacob access to all operation on all pods. To fix this, delete and re-create the role using the following YAML:
+
+
 ```yaml
-verbs: ["get", "list", "watch"]
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+    name: dev-user-access
+    namespace: dev-z
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
 ```
 
 ---
@@ -520,9 +695,79 @@ Complete the upgrade process by updating the worker node to the latest installed
 ### ✅ Solution
 
 ```bash
+First run the following command from the controlplane node:
+
+kubectl get nodes
+
+You should get an output like below, indicating that the worker node node02 is at an earlier version of kubernetes:
+
+NAME                    STATUS   ROLES           AGE   VERSION
+cluster1-controlplane   Ready    control-plane   49m   v1.34.0
+node02                  Ready    worker          29m   v1.33.0
+
+SSH into the node02 node:
+
+ssh node02
+
+Use any text editor you prefer to open the file that defines the Kubernetes apt repository.
+
+vim /etc/apt/sources.list.d/kubernetes.list
+
+Update the version in the URL to the next available minor release, i.e v1.34.
+
+deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /
+
+After making changes, save the file and exit from your text editor. Proceed with the next instruction.
+
+echo 'y' | curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key | sudo gpg --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+sudo apt-get update
+
+apt-cache madison kubeadm
+
+Momentarily go back to cluster1-controlplane node to drain the worker node:
+
 kubectl drain node02 --ignore-daemonsets --delete-emptydir-data
+
+Based on the version information displayed by apt-cache madison, it indicates that for Kubernetes version 1.34.0, the available package version is 1.34.0-1.1. Therefore, to install kubeadm for Kubernetes v1.34.0, use the following command:
+
+sudo apt-get install -y kubeadm=1.34.0-1.1
+
+Run the following command to upgrade the node:
+
 sudo kubeadm upgrade node
+
+Unhold kubeadm if its on hold while upgrading or use the appropriate suggestion mentioned in the output.
+
+Note that the above steps can take a few minutes to complete.
+
+Now, unhold and then upgrade the kubelet and kubectl versions:
+
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install --allow-change-held-packages -y kubelet=1.34.0-1.1 kubectl=1.34.0-1.1
+
+Optionally hold them again:
+
+sudo apt-mark hold kubelet kubectl
+
+Run the following commands to refresh the systemd configuration and apply changes to the Kubelet service:
+
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+Go back to the controlplane node again and uncordon node02:
+
 kubectl uncordon node02
+
+Finally verify the version upgrade:
+
+kubectl get nodes
+
+This should now show both at v1.34:
+
+NAME                    STATUS   ROLES           AGE   VERSION
+cluster1-controlplane   Ready    control-plane   70m   v1.34.0
+node02                  Ready    worker   
 ```
 
 ---
