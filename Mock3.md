@@ -401,66 +401,96 @@ Identify why the deployment is not in a running state, and then fix the issue so
 
 
 ---
-
 ### ✅ Solution
 
-First check the status of the web-server deployment:
+#### Step 1: Check the deployment status
 
-kubectl get deployments.apps -n restricted 
+```bash
+kubectl get deployments.apps -n restricted
+You should see the READY column showing 0/1, which indicates that the pod is not running.
 
-You should see the READY column showing 0/1 which means the pod is not running.
-
-Then run the following command:
-
-kubectl describe deployments.apps web-server -n restricted 
-
+Step 2: Describe the deployment
+bash
+Copy code
+kubectl describe deployments.apps web-server -n restricted
 In the output, check the Conditions section:
 
+graphql
+Copy code
 Conditions:
   Type             Status  Reason
   ----             ------  ------
   Progressing      True    NewReplicaSetCreated
   Available        False   MinimumReplicasUnavailable
   ReplicaFailure   True    FailedCreate
+This indicates that the ReplicaSet failed to create the pod.
 
-This shows that the replica creation failed. Lets find out the reason why:
+Step 3: Identify the exact failure reason
+Describe the ReplicaSet:
 
+bash
+Copy code
 kubectl describe replicaset -n restricted
+In the Events section, you will see an error similar to:
 
-The Events section will provide the exact error cause:
+vbnet
+Copy code
+Warning  FailedCreate  25s (x6 over 105s)  replicaset-controller  
+Error creating: pods "web-server-7d8b84ccc8-9ppsm" is forbidden: 
+violates PodSecurity "restricted:latest":
+- allowPrivilegeEscalation != false
+- unrestricted capabilities
+- runAsNonRoot != true
+- runAsUser=0
+- seccompProfile not set to RuntimeDefault or Localhost
+Step 4: Confirm Pod Security Admission enforcement
+Check the namespace labels:
 
-  Warning  FailedCreate  25s (x6 over 105s)  replicaset-controller  (combined from similar events): Error creating: pods "web-server-7d8b84ccc8-9ppsm" is forbidden: violates PodSecurity "restricted:latest": allowPrivilegeEscalation != false (container "nginx" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "nginx" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "nginx" must set securityContext.runAsNonRoot=true), runAsUser=0 (container "nginx" must not set runAsUser=0), seccompProfile (pod or container "nginx" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
-
-This confirms the pod was blocked by Pod Security Admission (PSA) because it doesn't meet the restricted security policy.
-Now, check that the namespace is labeled to enforce the restricted policy:
-
+bash
+Copy code
 kubectl get namespace restricted --show-labels
+You should see:
 
-You should see this label present: pod-security.kubernetes.io/enforce=restricted which means kubernetes is actively enforcing restricted-level pod Security in this namespace.
+bash
+Copy code
+pod-security.kubernetes.io/enforce=restricted
+This confirms that Pod Security Admission (PSA) is enforcing the restricted profile.
 
-According to the Events section of the replicaset, we need to make some changes in our deployment's securityContext section. Open the deployment file to edit:
+Step 5: Fix the deployment securityContext
+Edit the deployment:
 
+bash
+Copy code
 kubectl edit deployment web-server -n restricted
+Under spec.template.spec.containers, update the securityContext as follows:
 
-Enter insert mode by typing i and change the securityContext section under spec.containers as follows:
-
+yaml
+Copy code
 securityContext:
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
       - ALL
-    runAsNonRoot: true
-    seccompProfile:
-      type: RuntimeDefault
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+Also remove the following field if present:
 
-Also, remove runAsUser: 0 and then press Esc followed by :wq!. This will save the changes.
+yaml
+Copy code
+runAsUser: 0
+Save and exit the editor (Esc :wq!).
 
-You should then see the pod in a running state:
+Step 6: Verify the fix
+bash
+Copy code
+kubectl get pods -n restricted
+Expected output:
 
-kubectl get pods -n restricted 
+pgsql
+Copy code
 NAME                          READY   STATUS    RESTARTS   AGE
 web-server-55549f978f-lgp8w   1/1     Running   0          5m
-
 ---
 
 ## 🔟 Task – Disable Anonymous Kubelet Auth
