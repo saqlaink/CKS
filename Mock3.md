@@ -384,9 +384,9 @@ Apply the change:
 kubectl replace -f nginx-external-service-clusterip.yaml
 ```
 If we don't need the internal service exposed anymore (or it's for testing purposes), we can delete it.
-
+```
 kubectl -n system-hardening delete svc nginx-internal-service
-
+```
 This will stop the internal service from being available. However, you could also leave it as-is if you want to keep testing internal services.
 
 ---
@@ -407,12 +407,13 @@ Identify why the deployment is not in a running state, and then fix the issue so
 
 ```bash
 kubectl get deployments.apps -n restricted
+```
 You should see the READY column showing 0/1, which indicates that the pod is not running.
 
 Step 2: Describe the deployment
-bash
-Copy code
+```
 kubectl describe deployments.apps web-server -n restricted
+```
 In the output, check the Conditions section:
 
 graphql
@@ -428,9 +429,9 @@ This indicates that the ReplicaSet failed to create the pod.
 Step 3: Identify the exact failure reason
 Describe the ReplicaSet:
 
-bash
-Copy code
+```
 kubectl describe replicaset -n restricted
+```
 In the Events section, you will see an error similar to:
 
 vbnet
@@ -446,26 +447,23 @@ violates PodSecurity "restricted:latest":
 Step 4: Confirm Pod Security Admission enforcement
 Check the namespace labels:
 
-bash
-Copy code
+```
 kubectl get namespace restricted --show-labels
+```
 You should see:
 
-bash
-Copy code
 pod-security.kubernetes.io/enforce=restricted
+
 This confirms that Pod Security Admission (PSA) is enforcing the restricted profile.
 
 Step 5: Fix the deployment securityContext
 Edit the deployment:
-
-bash
-Copy code
+```
 kubectl edit deployment web-server -n restricted
+```
 Under spec.template.spec.containers, update the securityContext as follows:
 
-yaml
-Copy code
+```
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -474,17 +472,15 @@ securityContext:
   runAsNonRoot: true
   seccompProfile:
     type: RuntimeDefault
+```
 Also remove the following field if present:
-
-yaml
-Copy code
 runAsUser: 0
 Save and exit the editor (Esc :wq!).
 
 Step 6: Verify the fix
-bash
-Copy code
+```
 kubectl get pods -n restricted
+```
 Expected output:
 
 pgsql
@@ -492,7 +488,7 @@ Copy code
 NAME                          READY   STATUS    RESTARTS   AGE
 web-server-55549f978f-lgp8w   1/1     Running   0          5m
 ---
-```
+
 
 ## 🔟 Task – Disable Anonymous Kubelet Auth
 
@@ -512,40 +508,41 @@ Ensure that, from the node, the cluster cannot be accessed with kubectl unless t
 
 ### ✅ Solution
 
+Solution
 First ssh to cluster2-controlplane cluster:
 
 ssh cluster2-controlplane
 
 Then. open the kubelet config file to edit:
-
+```
 sudo nano /var/lib/kubelet/config.yaml
-
+```
 and change the authentication.anonymous.enabled to false:
-
+```
 authentication:
   anonymous:
     enabled: false
-
+```
 and authorization.mode to Webhook:
-
+```
 authorization:
   mode: Webhook
-
+```
 Save and exit the file and then restart the kubelet:
 
 sudo systemctl restart kubelet
 
 To make the cluster info inaccessible without the kubeconfig flag:
-
+```
 mv ~/.kube/config ~/.kube/config.bak
 unset KUBECONFIG
-
+```
 The kubernetes commands should then not work without using --kubeconfig=/root/custom-config/admin.conf.
 
 Now delete the custom-role using this kubeconfig file:
-
+```
 kubectl delete role custom-role -n delta --kubeconfig=/root/custom-config/admin.conf
-
+```
 ---
 
 ## 1️⃣1️⃣ Task – Generate SBOM
@@ -589,7 +586,7 @@ k describe deployment rocket-server -n space
 and check the Port field under Pod Template -> Containers.
 
 Then create and apply the following ingress yaml file:
-
+```
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -614,7 +611,7 @@ spec:
                 name: rocket-server
                 port:
                   number: 80
-
+```
 Once that is done, check the IP address under CLUSTER-IP header of the ingress-nginx-controller:
 
 kubectl get svc -n ingress-nginx
@@ -657,19 +654,19 @@ Then edit the deployment to mount the secret:
 kubectl edit deployment code-server -n code
 
 Under the spec.template.spec section, add:
-
+```
 volumes:
   - name: secret-volume
     secret:
       secretName: code-secret
-
+```
 Under the spec.template.spec.containers section, add the volume mount then:
-
+```
 volumeMounts:
   - name: secret-volume
     mountPath: /etc/code/tls
     readOnly: true
-
+```
 Save and exit the deployment.
 
 ---
@@ -727,9 +724,9 @@ Complete the upgrade process by updating the worker node to the latest installed
 
 ```bash
 First run the following command from the controlplane node:
-
+```
 kubectl get nodes
-
+```
 You should get an output like below, indicating that the worker node node02 is at an earlier version of kubernetes:
 
 NAME                    STATUS   ROLES           AGE   VERSION
@@ -737,63 +734,63 @@ cluster1-controlplane   Ready    control-plane   49m   v1.34.0
 node02                  Ready    worker          29m   v1.33.0
 
 SSH into the node02 node:
-
+```
 ssh node02
-
+```
 Use any text editor you prefer to open the file that defines the Kubernetes apt repository.
-
+```
 vim /etc/apt/sources.list.d/kubernetes.list
-
+```
 Update the version in the URL to the next available minor release, i.e v1.34.
-
+```
 deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /
-
+```
 After making changes, save the file and exit from your text editor. Proceed with the next instruction.
-
+```
 echo 'y' | curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key | sudo gpg --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
 sudo apt-get update
 
 apt-cache madison kubeadm
-
+```
 Momentarily go back to cluster1-controlplane node to drain the worker node:
-
+```
 kubectl drain node02 --ignore-daemonsets --delete-emptydir-data
-
+```
 Based on the version information displayed by apt-cache madison, it indicates that for Kubernetes version 1.34.0, the available package version is 1.34.0-1.1. Therefore, to install kubeadm for Kubernetes v1.34.0, use the following command:
-
+```
 sudo apt-get install -y kubeadm=1.34.0-1.1
-
+```
 Run the following command to upgrade the node:
-
+```
 sudo kubeadm upgrade node
-
+```
 Unhold kubeadm if its on hold while upgrading or use the appropriate suggestion mentioned in the output.
 
 Note that the above steps can take a few minutes to complete.
 
 Now, unhold and then upgrade the kubelet and kubectl versions:
-
+```
 sudo apt-mark unhold kubelet kubectl
 sudo apt-get install --allow-change-held-packages -y kubelet=1.34.0-1.1 kubectl=1.34.0-1.1
-
+```
 Optionally hold them again:
-
+```
 sudo apt-mark hold kubelet kubectl
-
+```
 Run the following commands to refresh the systemd configuration and apply changes to the Kubelet service:
-
+```
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
-
+```
 Go back to the controlplane node again and uncordon node02:
-
+```
 kubectl uncordon node02
-
+```
 Finally verify the version upgrade:
-
+```
 kubectl get nodes
-
+```
 This should now show both at v1.34:
 
 NAME                    STATUS   ROLES           AGE   VERSION
