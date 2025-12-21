@@ -1,4 +1,3 @@
-```markdown
 # CKS Practice Exam – Full Solutions (Nothing Removed)
 
 ## **1.**
