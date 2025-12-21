@@ -492,6 +492,7 @@ Copy code
 NAME                          READY   STATUS    RESTARTS   AGE
 web-server-55549f978f-lgp8w   1/1     Running   0          5m
 ---
+```
 
 ## 🔟 Task – Disable Anonymous Kubelet Auth
 
