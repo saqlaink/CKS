@@ -748,9 +748,7 @@ deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io
 After making changes, save the file and exit from your text editor. Proceed with the next instruction.
 ```
 echo 'y' | curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key | sudo gpg --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-
 sudo apt-get update
-
 apt-cache madison kubeadm
 ```
 Momentarily go back to cluster1-controlplane node to drain the worker node:
