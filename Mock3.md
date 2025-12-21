@@ -1,4 +1,4 @@
-1. Task
+## **1.** Task
 You are setting up a new Kubernetes cluster and need to secure Docker as part of the cluster setup.
 
 Ensure that docker runs under the "root" group and that no external TCP connections are allowed to the docker daemon.
