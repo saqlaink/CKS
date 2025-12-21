@@ -722,7 +722,7 @@ Complete the upgrade process by updating the worker node to the latest installed
 
 ### ✅ Solution
 
-```bash
+
 First run the following command from the controlplane node:
 ```
 kubectl get nodes
@@ -796,7 +796,7 @@ This should now show both at v1.34:
 NAME                    STATUS   ROLES           AGE   VERSION
 cluster1-controlplane   Ready    control-plane   70m   v1.34.0
 node02                  Ready    worker   
-```
+
 
 ---
 
