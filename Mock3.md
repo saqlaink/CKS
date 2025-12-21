@@ -357,7 +357,7 @@ Your task is to disable or unexpose ports to minimize external access to unneces
 ### ✅ Solution
 
 We will change the nginx-external-service to be only accessible within the cluster by changing its service type to ClusterIP.
-
+```
 apiVersion: v1
 kind: Service
 metadata:
@@ -376,13 +376,13 @@ spec:
       port: 443
       targetPort: 443
   type: ClusterIP
-
+```
 Save it as nginx-external-service-clusterip.yaml.
 
 Apply the change:
-
+```
 kubectl replace -f nginx-external-service-clusterip.yaml
-
+```
 If we don't need the internal service exposed anymore (or it's for testing purposes), we can delete it.
 
 kubectl -n system-hardening delete svc nginx-internal-service
