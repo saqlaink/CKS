@@ -1,13 +1,23 @@
+# 🛡️ Kubernetes Cluster Security & Hardening – Step‑by‑Step README
 
-You are setting up a new Kubernetes cluster and need to secure Docker as part of the cluster setup.
+This document consolidates **all tasks and solutions** into a clean, structured, and exam‑ready **Markdown README**.
+All commands are **copy‑paste friendly**, configurations are **persistent**, and steps follow **CKS best practices**.
 
-Ensure that docker runs under the "root" group and that no external TCP connections are allowed to the docker daemon.
+---
 
-Ensure the configuration is persistent across restarts.
+## 1️⃣ Secure Docker Daemon
 
-Solution
-Change the ownership of the docker file:
+### 🎯 Objective
 
+* Run Docker under the `root` group
+* Disable all external TCP access to Docker
+* Ensure persistence across restarts
+
+### ✅ Solution
+
+#### 1. Change Docker socket ownership
+
+```bash
 sudo chown root:root /var/run/docker.sock
 ```
 
@@ -420,7 +430,3 @@ kubectl uncordon node02
 ---
 
 🔥 **You now have a clean, exam‑ready Kubernetes Security README**
-
-NAME                    STATUS   ROLES           AGE   VERSION
-cluster1-controlplane   Ready    control-plane   70m   v1.34.0
-node02                  Ready    worker          50m   v1.34.0
