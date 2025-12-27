@@ -1,4 +1,4 @@
-1. A deployment named frontend in the apparmor-demo namespace requires additional security isolation. An AppArmor profile has been created at /etc/apparmor.d/containers/restricted-frontend with the following security restrictions:
+## 1. A deployment named frontend in the apparmor-demo namespace requires additional security isolation. An AppArmor profile has been created at /etc/apparmor.d/containers/restricted-frontend with the following security restrictions:
 
 Prevents the container from writing to /etc/, /bin/, /sbin/, /usr/bin/, and /usr/sbin/ directories
 Allows network access only on TCP and UDP protocols
@@ -12,15 +12,18 @@ Configure the deployment to use the localhost/restricted-frontend AppArmor profi
 Use the modern securityContext approach instead of deprecated annotations
 
 
-Solution
+### Solution
 AppArmor Profile Solution
 Step 1: Load the AppArmor Profile
+```
 apparmor_parser /etc/apparmor.d/containers/restricted-frontend
-
+```
 Step 2: Verify the Profile is Loaded
+```
 apparmor_status | grep restricted-frontend
-
+```
 Step 3: Configure Deployment to Use AppArmor Profile (Modern Approach)
+```
 kubectl patch deployment frontend -n apparmor-demo -p '
 {
   "spec": {
@@ -45,13 +48,14 @@ kubectl patch deployment frontend -n apparmor-demo -p '
 
 # After patching, wait for new pod with AppArmor to be created
 kubectl rollout status deployment/frontend -n apparmor-demo --timeout=30s
-
+```
 Step 4: Verify Configuration
+```
 kubectl get deployment frontend -n apparmor-demo -o yaml | grep -A5 appArmorProfile
+```
 
 
-
-2. Create a RuntimeClass and configure a deployment to use it for workload isolation.
+## 2. Create a RuntimeClass and configure a deployment to use it for workload isolation.
 
 Tasks:
 
@@ -73,9 +77,10 @@ RuntimeClass: secured
 Create both resources with the exact specifications above.
 
 
-Solution
+### Solution
 RuntimeClass Solution
 Step 1: Create RuntimeClass
+```
 cat << EOF | kubectl apply -f -
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
@@ -83,8 +88,9 @@ metadata:
   name: secured
 handler: runc
 EOF
-
+```
 Step 2: Create Deployment with RuntimeClass
+```
 cat << EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
@@ -108,21 +114,26 @@ spec:
         ports:
         - containerPort: 80
 EOF
+```
 
 Step 3: Verify RuntimeClass
+```
 kubectl get runtimeclass secured
-
+```
 Step 4: Verify Deployment
+```
 kubectl get deployment isolated-app -n runtime-demo
-
+```
 Step 5: Check Pod Status
+```
 kubectl get pods -n runtime-demo -l app=isolated-app
-
+```
 Step 6: Test Application
+```
 kubectl exec -n runtime-demo deployment/isolated-app -- nginx -t
+```
 
-
-3. OPA Gatekeeper is installed to enforce that all pods in the gatekeeper-demo namespace have resource limits defined. A ConstraintTemplate named k8srequiredresources is already created that validates CPU and memory limits. Create a Constraint that enforces this policy.
+## 3. OPA Gatekeeper is installed to enforce that all pods in the gatekeeper-demo namespace have resource limits defined. A ConstraintTemplate named k8srequiredresources is already created that validates CPU and memory limits. Create a Constraint that enforces this policy.
 
 Tasks:
 
@@ -138,16 +149,19 @@ Target namespace: gatekeeper-demo
 Parameters: limits: true
 
 
-Solution
+### Solution
 OPA Gatekeeper Solution
 Step 1: Wait for Gatekeeper to be Ready
+```
 kubectl get pods -n gatekeeper-system 
-
+```
 Step 2: Verify ConstraintTemplate is Ready
+```
 # Check that the ConstraintTemplate exists and is ready
 kubectl get constrainttemplate k8srequiredresources
-
+```
 Step 3: Create Constraint
+```
 cat << EOF | kubectl apply -f -
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sRequiredResources
@@ -159,8 +173,9 @@ spec:
   parameters:
     limits: true
 EOF
-
+```
 Step 4: Test the Policy
+```
 # This should fail - no resource limits
 cat << EOF | kubectl apply -f -
 apiVersion: v1
@@ -173,6 +188,7 @@ spec:
   - name: nginx
     image: nginx:alpine
 EOF
+
 
 # This should succeed - with resource limits
 cat << EOF | kubectl apply -f -
@@ -190,12 +206,13 @@ spec:
         cpu: "100m"
         memory: "128Mi"
 EOF
-
+```
 Step 5: Verify Constraint Status
+```
 kubectl get k8srequiredresources must-have-resources -o yaml
+```
 
-
-4. A security audit revealed potential privilege escalation attempts in the privilege-monitor namespace.
+## 4. A security audit revealed potential privilege escalation attempts in the privilege-monitor namespace.
 Create a Falco rule that detects when a process attempts to gain higher privileges through setuid/setgid binaries.
 
 The rule should be added to /etc/falco/falco_rules.local.yaml with below specs:
@@ -208,11 +225,12 @@ Exclude common system directories like /bin, /usr/bin, /sbin, /usr/sbin
 Make sure the rule persists across Falco updates by adding it to the local rules file.
 
 
-Solution
+### Solution
 Privilege Escalation Detection Solution
 To set up a custom Falco rule for detecting privilege escalation attempts, please follow the instructions below:
 
 Save the following rule to /etc/falco/falco_rules.local.yaml to ensure it persists across updates:
+```
    - rule: Detect Unexpected Privilege Escalation
      desc: Detection of setuid/setgid execution from non-standard directories
      condition: >
@@ -226,20 +244,23 @@ Save the following rule to /etc/falco/falco_rules.local.yaml to ensure it persis
        PRIV_ESC_ALERT: %evt.time,%user.name,%proc.name,%proc.cmdline
      priority: CRITICAL
      tags: [container, privilege_escalation, mitre_privilege_escalation]
-
+```
 Restart Falco to load the new rule using the following command:
+```
    systemctl restart falco
-
+```
 To test the rule, simulate a suspicious setuid execution:
+```
 kubectl exec -n privilege-monitor deploy/suspicious-app -- sh -c "cp /usr/bin/whoami /tmp/suspicious-setuid && chmod 4755 /tmp/suspicious-setuid && /tmp/suspicious-setuid"
-
+```
 Check the Falco logs for alerts by running:
+```
    journalctl -u falco -f
-
+```
 You should see alerts formatted as follows: PRIV_ESC_ALERT: timestamp,username,process_name,command_line.
 
 
-5. Create pod named secure-pod in the security-context-demo namespace. This pod requires enhanced security configurations. Please perform the following tasks to configure it with the specified security context requirements:
+## 5. Create pod named secure-pod in the security-context-demo namespace. This pod requires enhanced security configurations. Please perform the following tasks to configure it with the specified security context requirements:
 
 Set the pod to run as a non-root user with user ID 1001.
 Configure the pod to run with group ID 1001.
@@ -250,9 +271,10 @@ Ensure that these security settings are applied effectively to enhance the pod's
 
 
 
-Solution
+### Solution
 Pod Security Context Solution
 Step 1: Create the secure pod
+```
 cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
@@ -277,19 +299,22 @@ spec:
         drop:
         - ALL
 EOF
-
+```
 Step 2: Verify the pod is running
+```
 kubectl get pod secure-pod -n security-context-demo
-
+```
 Step 3: Check security context details
+```
 kubectl describe pod secure-pod -n security-context-demo
-
+```
 Step 4: Test the pod functionality
+```
 kubectl exec -n security-context-demo secure-pod -- nginx -t
+```
 
 
-
-6. Create Security Context Constraints using Pod Security Standards for the scc-demo namespace. Implement the following restrictions:
+## 6. Create Security Context Constraints using Pod Security Standards for the scc-demo namespace. Implement the following restrictions:
 
 Prevent privileged containers
 Require runAsNonRoot
@@ -301,17 +326,19 @@ Apply these restrictions using Pod Security Standards labels. The restricted pro
 
 
 
-Solution
+### Solution
 Security Context Constraints with PSS Solution
 Step 1: Apply Pod Security Standards
+```
 kubectl label namespace scc-demo \
   pod-security.kubernetes.io/enforce=restricted \
   pod-security.kubernetes.io/enforce-version=latest \
   pod-security.kubernetes.io/audit=restricted \
   pod-security.kubernetes.io/warn=restricted \
   --overwrite
-
+```
 Step 2: Test the Restrictions
+```
 # This should fail - violates multiple PSS rules
 kubectl run test-violation -n scc-demo --image=busybox --restart=Never --command -- sleep 3600
 
@@ -340,30 +367,33 @@ spec:
     ports:
     - containerPort: 8080
 EOF
-
+```
 Step 3: Verify PSS Enforcement
+```
 # Check namespace labels
 kubectl get namespace scc-demo --show-labels
 
 # Test that privileged pods are blocked
 kubectl run test-privileged -n scc-demo --image=busybox --restart=Never --privileged --command -- sleep 3600
+```
 
 
-
-7. Migrate pods from the deprecated PodSecurityPolicy to Pod Security Standards in the pss-migration namespace. Update the existing deployment legacy-app to comply with the restricted policy level.
+## 7. Migrate pods from the deprecated PodSecurityPolicy to Pod Security Standards in the pss-migration namespace. Update the existing deployment legacy-app to comply with the restricted policy level.
 
 The deployment currently uses the nginx-unprivileged image; however, it has a privileged security context enabled. Please update the deployment to comply with the restricted policy requirements while ensuring that it maintains functionality on port 8080.
 
 
-Solution
+### Solution
 PSS Migration Solution
 Step 1: Enable Pod Security Standards
+```
 kubectl label namespace pss-migration \
   pod-security.kubernetes.io/enforce=restricted \
   pod-security.kubernetes.io/enforce-version=latest \
   --overwrite
-
+```
 Step 2: Update Deployment to be PSS Compliant
+```
 kubectl patch deployment legacy-app -n pss-migration -p '
 {
   "spec": {
@@ -400,15 +430,16 @@ kubectl patch deployment legacy-app -n pss-migration -p '
   }
 }
 '
-
+```
 Step 3: Verify Migration
+```
 kubectl get deployment legacy-app -n pss-migration
 kubectl get pods -n pss-migration -l app=legacy-app
 kubectl exec -n pss-migration deployment/legacy-app -- nginx -t
+```
 
 
-
-8. Create a NetworkPolicy in the egress-control namespace that restricts egress traffic to only allow:
+## 8. Create a NetworkPolicy in the egress-control namespace that restricts egress traffic to only allow:
 
 DNS queries (UDP/TCP port 53) to any destination
 HTTPS traffic (TCP port 443) to public IP ranges (excluding private IPs)
@@ -418,9 +449,10 @@ Use CIDR blocks to allow public IP ranges while blocking private IP ranges.
 The policy should apply to all pods in the namespace and demonstrate egress control using IP-based rules.
 
 
-Solution
+### Solution
 Egress Network Policy Solution
 Step 1: Create Egress NetworkPolicy
+```
 cat << EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -451,8 +483,9 @@ spec:
         - 172.16.0.0/12
         - 192.168.0.0/16
 EOF
-
+```
 Step 2: Test the Policy
+```
 # Create a test pod
 kubectl run test-pod -n egress-control --image=appropriate/curl --command -- sleep 3600
 
@@ -467,13 +500,14 @@ kubectl exec -n egress-control test-pod -- curl -I --connect-timeout 3 https://g
 
 echo "=== Testing HTTP (should be blocked) ==="
 kubectl exec -n egress-control test-pod -- curl -I --connect-timeout 3 http://example.com
-
+```
 Step 3: Verify Policy Configuration
+```
 kubectl get networkpolicy restrict-egress -n egress-control -o yaml
+```
 
 
-
-9. Enable audit logging for the Kubernetes API server to monitor security-relevant events. Please adhere to the following steps:
+## 9. Enable audit logging for the Kubernetes API server to monitor security-relevant events. Please adhere to the following steps:
 
 Create an audit policy that logs metadata for all requests.
 Configure audit log rotation with the following specifications: a maximum size of 100MB, retain 10 backups, and maintain logs for a maximum of 30 days.
@@ -482,18 +516,20 @@ Mount the necessary directories to facilitate the API server's access to policy 
 Please ensure that the API server continues to function normally after implementing these changes to be able to resume the exam.
 
 In the event that the API server does not recover, a backup is stored at /root/kube-apiserver-backup.yaml. To restore the API server, execute the following commands:
-
+```
 cp /root/kube-apiserver-backup.yaml /etc/kubernetes/manifests/kube-apiserver.yaml
 sleep 45
 kubectl get nodes
+```
 
-
-Solution
+### Solution
 API Server Audit Logging Solution
 Step 1: Prepare
+```
 mkdir -p /etc/kubernetes
 mkdir -p /var/log/kubernetes
-
+```
+```
 cat > /etc/kubernetes/audit-policy.yaml << 'EOF'
 apiVersion: audit.k8s.io/v1
 kind: Policy
@@ -502,25 +538,28 @@ rules:
   omitStages:
   - RequestReceived
 EOF
-
+```
 Step 2: Update API Server Manifest
 Edit /etc/kubernetes/manifests/kube-apiserver.yaml:
-
+```
 Add to command array (insert among other flags):
 - --audit-policy-file=/etc/kubernetes/audit-policy.yaml
 - --audit-log-path=/var/log/kubernetes/audit.log
 - --audit-log-maxage=30
 - --audit-log-maxbackup=10
 - --audit-log-maxsize=100
+```
 
 Add to volumeMounts section:
+```
 - mountPath: /etc/kubernetes
   name: k8s-config
   readOnly: true
 - mountPath: /var/log/kubernetes
   name: audit-logs
-
+```
 Add to volumes section:
+```
 - hostPath:
     path: /etc/kubernetes
     type: DirectoryOrCreate
@@ -529,8 +568,9 @@ Add to volumes section:
     path: /var/log/kubernetes
     type: DirectoryOrCreate
   name: audit-logs
-
+```
 Step 3: Verify Configuration
+```
 # Wait for API server to restart (may take 30-60 seconds)
 sleep 45
 
@@ -543,16 +583,17 @@ ls -la /var/log/kubernetes/audit.log
 # Generate some audit events
 kubectl get pods
 kubectl get nodes
+```
 
 Step 4: Troubleshooting
 If API server doesn't recover:
-
+```
 cp /root/kube-apiserver-backup.yaml /etc/kubernetes/manifests/kube-apiserver.yaml
 sleep 45
 kubectl get nodes
+```
 
-
-10. A security team needs cross-namespace monitoring capabilities with restricted permissions. Create RBAC resources that allow a ServiceAccount to read pods across multiple namespaces while following the principle of least privilege.
+### 10. A security team needs cross-namespace monitoring capabilities with restricted permissions. Create RBAC resources that allow a ServiceAccount to read pods across multiple namespaces while following the principle of least privilege.
 
 Requirements:
 
@@ -564,16 +605,19 @@ Use a ClusterRole with namespaced RoleBindings named cross-namespace-monitor to 
 Ensure the ServiceAccount has the minimum required permissions following the principle of least privilege.
 
 
-Solution
+### Solution
 Advanced RBAC with Restricted Namespace Access Solution
 Step 1: Create the ServiceAccount
+```
 kubectl create serviceaccount cluster-monitor -n monitoring-ns
-
+```
 Step 2: Label the namespaces
+```
 kubectl label namespace monitoring-ns monitoring=enabled --overwrite
 kubectl label namespace apparmor-demo monitoring=enabled --overwrite
-
+```
 Step 3: Create the ClusterRole with pod read permissions
+```
 cat << EOF | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -584,8 +628,9 @@ rules:
   resources: ["pods"]
   verbs: ["get", "list", "watch"]
 EOF
-
+```
 Step 4: Create RoleBindings in allowed namespaces only
+```
 for ns in monitoring-ns apparmor-demo; do
 cat << EOF | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
@@ -603,18 +648,19 @@ subjects:
   namespace: monitoring-ns
 EOF
 done
-
+```
 Step 5: Verify permissions
+```
 # Allowed namespaces
 kubectl auth can-i get pods --as=system:serviceaccount:monitoring-ns:cluster-monitor -n monitoring-ns
 kubectl auth can-i get pods --as=system:serviceaccount:monitoring-ns:cluster-monitor -n apparmor-demo
 
 # Disallowed namespace (should return no)
 kubectl auth can-i get pods --as=system:serviceaccount:monitoring-ns:cluster-monitor -n default
+```
 
 
-
-11. Secure the Kubernetes Dashboard deployment by implementing network segmentation:
+## 11. Secure the Kubernetes Dashboard deployment by implementing network segmentation:
 
 Create a NetworkPolicy named restrict-dashboard-access in the kubernetes-dashboard namespace with the following specifications:
 
@@ -627,9 +673,10 @@ This will restrict dashboard access to only pods within the dashboard namespace.
 Focus on network-level security. The dashboard is already deployed and running.
 
 
-Solution
+### Solution
 Kubernetes Dashboard Network Security Solution
 Step 1: Create NetworkPolicy
+```
 kubectl apply -f - <<EOF
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -651,8 +698,9 @@ spec:
     - protocol: TCP
       port: 8443
 EOF
-
+```
 Step 2: Verify Configuration
+```
 # Check network policy
 kubectl get networkpolicy restrict-dashboard-access -n kubernetes-dashboard
 
@@ -661,9 +709,9 @@ kubectl get networkpolicy restrict-dashboard-access -n kubernetes-dashboard -o y
 
 # Ensure dashboard is still running
 kubectl get pods -n kubernetes-dashboard -l k8s-app=kubernetes-dashboard
+```
 
-
-12. A private container registry requires authentication for pulling images. Configure the necessary resources to allow pods in the private-registry-ns namespace to pull images from a private registry.
+## 12. A private container registry requires authentication for pulling images. Configure the necessary resources to allow pods in the private-registry-ns namespace to pull images from a private registry.
 
 Tasks:
 
@@ -680,17 +728,19 @@ The pod should use the busybox image for testing since we don't have actual acce
 
 
 
-Solution
+### Solution
 Image Pull Secrets Solution
 Step 1: Create the docker-registry Secret
+```
 kubectl create secret docker-registry my-registry-key \
   --docker-server=registry.example.com \
   --docker-username=myuser \
   --docker-password=mypassword \
   --docker-email=myuser@example.com \
   -n private-registry-ns
-
+```
 Step 2: Create a Pod that uses the image pull secret
+```
 cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
@@ -707,8 +757,9 @@ spec:
   imagePullSecrets:
   - name: my-registry-key
 EOF
-
+```
 Step 3: Verify the configuration
+```
 # Check the secret was created
 kubectl get secret my-registry-key -n private-registry-ns -o yaml
 
@@ -733,9 +784,9 @@ type: kubernetes.io/dockerconfigjson
 data:
   .dockerconfigjson: $(echo '{"auths":{"registry.example.com":{"username":"myuser","password":"mypassword","email":"myuser@example.com","auth":"'$(echo -n 'myuser:mypassword' | base64)'"}}}' | base64 -w0)
 EOF
+```
 
-
-13. A security audit identified that containers in the secure-runtime namespace could be vulnerable to process debugging attacks. There is already a pod named secure-app running in this namespace.
+## 13. A security audit identified that containers in the secure-runtime namespace could be vulnerable to process debugging attacks. There is already a pod named secure-app running in this namespace.
 
 Your task is to:
 
@@ -754,9 +805,10 @@ Note: You may need to restart or recreate the pod to apply the seccomp profile c
 
 
 
-Solution
+### Solution
 Syscall Filtering with Seccomp Solution
 Create the custom seccomp profile:
+```
 cat > /var/lib/kubelet/seccomp/profiles/block-debug.json <<'EOF'
 {
     "defaultAction": "SCMP_ACT_ALLOW",
@@ -771,10 +823,10 @@ cat > /var/lib/kubelet/seccomp/profiles/block-debug.json <<'EOF'
     ]
 }
 EOF
-
+```
 Apply the seccomp profile to the existing pod:
 Since it is not possible to modify a running pod's security context directly, the pod must be recreated:
-
+```
 # Delete the existing pod
 kubectl delete pod secure-app -n secure-runtime
 
@@ -796,10 +848,10 @@ spec:
     ports:
     - containerPort: 80
 EOF
+```
 
 
-
-14. Configure resource limits for a pod to ensure predictable performance and prevent resource starvation. Create a pod named limited-pod in the resource-demo namespace with the following specifications:
+## 14. Configure resource limits for a pod to ensure predictable performance and prevent resource starvation. Create a pod named limited-pod in the resource-demo namespace with the following specifications:
 
 Resource Requirements:
 
@@ -814,9 +866,10 @@ Ensure the pod achieves "Guaranteed" QoS class by setting equal requests and lim
 Verify the pod is running successfully
 
 
-Solution
+### Solution
 Resource Limits and QoS Classes Solution
 Step 1: Create the pod with equal requests and limits for Guaranteed QoS
+```
 cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
@@ -839,8 +892,9 @@ spec:
         cpu: "100m"
         memory: "64Mi"
 EOF
-
+```
 Step 2: Verify the pod configuration
+```
 # Check the pod is running
 kubectl get pod limited-pod -n resource-demo
 
@@ -849,15 +903,16 @@ kubectl get pod limited-pod -n resource-demo -o jsonpath='{.spec.containers[0].r
 
 # Verify QoS class (should be Guaranteed)
 kubectl get pod limited-pod -n resource-demo -o jsonpath='{.status.qosClass}'
-
+```
 Step 3: Detailed verification
+```
 # Get detailed pod information
 kubectl describe pod limited-pod -n resource-demo
-
+```
 Understanding QoS Classes:
-Guaranteed: All containers have memory/CPU limits EQUAL to requests
-Burstable: At least one container has memory/CPU request < limit
-BestEffort: No resource requests or limits specified
+- Guaranteed: All containers have memory/CPU limits EQUAL to requests
+- Burstable: At least one container has memory/CPU request < limit
+- BestEffort: No resource requests or limits specified
 Key Points:
 For Guaranteed QoS, BOTH CPU and memory must have equal requests and limits
 Lower memory (64Mi) ensures the pod can schedule on resource-constrained nodes
@@ -865,33 +920,36 @@ Guaranteed pods are last to be killed during resource contention
 
 
 
-15. Remove a user from the Docker group to enhance security. The user 'develop' should no longer have Docker privileges.
+## 15. Remove a user from the Docker group to enhance security. The user 'develop' should no longer have Docker privileges.
 
 Use the gpasswd command to remove the user from the docker group
 
 
-Solution
+### Solution
 Remove User from Docker Group Solution
 Step 1: Remove the user from docker group
+```
 sudo gpasswd -d develop docker
-
+```
 Step 2: Verify the user is no longer in docker group
+```
 groups develop
-
+```
 Step 3: Alternative verification methods
+```
 # Check /etc/group file
 grep docker /etc/group
 
 # Check user's groups
 id develop
-
+```
 Security Benefits:
-Prevents non-privileged users from running Docker commands
-Reduces attack surface by limiting who can control containers
-Follows principle of least privilege
+- Prevents non-privileged users from running Docker commands
+- Reduces attack surface by limiting who can control containers
+- Follows principle of least privilege
 
 
-16. A pod named volume-app in the volume-security namespace is configured to use a hostPath volume. Apply security measures to restrict the volume access and prevent potential host system compromise.
+## 16. A pod named volume-app in the volume-security namespace is configured to use a hostPath volume. Apply security measures to restrict the volume access and prevent potential host system compromise.
 
 Security Requirements:
 
@@ -910,12 +968,14 @@ This configuration allows log reading without granting write access to the host 
 HostPath volumes can be security risks if not properly configured. Always use read-only mounts when possible.
 
 
-Solution
+### Solution
 HostPath Volume Security Solution
 Step 1: Create the host directory (if not exists)
+```
 mkdir -p /var/log/app
-
+```
 Step 2: Create the pod with secured hostPath volume
+```
 cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
@@ -942,8 +1002,9 @@ spec:
       mountPath: /app/logs
       readOnly: true
 EOF
-
+```
 Step 3: Verify the pod configuration
+```
 # Check the pod is running
 kubectl get pod volume-app -n volume-security
 
@@ -955,20 +1016,22 @@ kubectl get pod volume-app -n volume-security -o jsonpath='{.spec.containers[0].
 
 # Check security context
 kubectl get pod volume-app -n volume-security -o jsonpath='{.spec.securityContext}'
-
+```
 Step 4: Test the volume access
+```
 # Test that we can read from the volume
 kubectl exec -n volume-security volume-app -- ls -la /app/logs/
 
 # Test that we cannot write to the volume (should fail)
 kubectl exec -n volume-security volume-app -- touch /app/logs/test.txt
-
+```
 Step 5: Detailed verification
+```
 # Get full pod details
 kubectl describe pod volume-app -n volume-security
-
+```
 Security Benefits:
-Read-only mount: Prevents container from modifying host filesystem
-Non-root user: Reduces impact if container is compromised
-Specific directory: Limits access to only needed host path
-DirectoryOrCreate: Ensures directory exists without excessive permissions
+- Read-only mount: Prevents container from modifying host filesystem
+- Non-root user: Reduces impact if container is compromised
+- Specific directory: Limits access to only needed host path
+- DirectoryOrCreate: Ensures directory exists without excessive permissions
