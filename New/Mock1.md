@@ -1,6 +1,5 @@
 🛡️ Kubernetes Security Tasks & Solutions
-1️⃣ Crypto-Mining Detection Using Falco
-Task
+## 1️⃣ Crypto-Mining Detection Using Falco
 
 A pod in the crypto-monitor namespace is suspected of running crypto-mining software.
 Create a Falco rule that detects the execution of known mining processes like xmrig, minerd, or cpuminer.
@@ -23,13 +22,13 @@ Tag the events with:
 
 Make sure the rule persists across Falco updates by adding it to the local rules file.
 
-Solution
+### Solution
 Crypto Mining Detection Solution
 
 To set up a custom Falco rule for detecting crypto-mining processes, please follow the instructions below:
 
 Save the following rule to /etc/falco/falco_rules.local.yaml to ensure it persists across updates:
-
+```bash
 - rule: Detect Crypto Mining Processes
   desc: Detection of known crypto mining software execution
   condition: >
@@ -39,30 +38,29 @@ Save the following rule to /etc/falco/falco_rules.local.yaml to ensure it persis
     MINING_ALERT: %evt.time,%container.name,%proc.name
   priority: CRITICAL
   tags: [container, crypto_mining, mitre_execution]
-
+```
 
 Restart Falco to load the new rule using the following command:
-
+```bash
 systemctl restart falco
-
+```
 
 To test the rule, simulate a mining process execution with this command:
-
+```bash
 kubectl exec -n crypto-monitor deploy/suspicious-app -- \
   sh -c "cp /bin/busybox /tmp/xmrig && /tmp/xmrig"
-
+```
 
 Check the Falco logs for alerts by running:
-
+```bash
 journalctl -u falco -f
-
+```
 
 You should see alerts formatted as follows:
 
 MINING_ALERT: timestamp,container_name,process_name
 
-2️⃣ Malicious Egress Blocking Using NetworkPolicy
-Task
+## 2️⃣ Malicious Egress Blocking Using NetworkPolicy
 
 A security team has identified that pods in the threat-prevention namespace are attempting to connect to known malicious IP ranges used for command and control servers.
 
@@ -84,11 +82,11 @@ The policy should be named block-malicious-egress
 
 Should not affect ingress traffic
 
-Solution
+### Solution
 Malicious Egress Blocking Solution
 
 Create a NetworkPolicy that effectively blocks egress to known malicious IP ranges while allowing all other traffic:
-
+```
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -110,14 +108,14 @@ spec:
         except:
         - 192.168.100.0/24
         - 10.0.99.0/24
-
+```
 
 To apply the policy, use the following command:
-
+```bash
 kubectl apply -f - <<EOF
 [above yaml content]
 EOF
-
+```
 
 This policy operates based on the following principles:
 
@@ -130,15 +128,16 @@ The ipBlock with the except clause permits all traffic except for the specified 
 Testing the Policy
 
 To test allowed traffic, use the command:
-
+```bash
 kubectl exec -n threat-prevention test-pod -- \
   curl --connect-timeout 3 www.google.com
-
+```
 
 To test blocked traffic (this should timeout), execute:
-
+```bash
 kubectl exec -n threat-prevention test-pod -- \
   curl --connect-timeout 3 http://192.168.100.10
+```
 
 3️⃣ Prevent Privilege Escalation in Pod Security Context
 Task
@@ -326,35 +325,37 @@ Egress: ✓ ALLOWED (correct)
 🎉 NETWORK POLICY IS WORKING CORRECTLY! 🎉
 
 
-5️⃣ RBAC Restriction for ci-bot Service Account
-Task
+## 5️⃣ RBAC Restriction for `ci-bot` Service Account
+
+### Task
 
 A service account named ci-bot in the ci-cd namespace has been granted excessive permissions that could potentially enable it to create cluster-admin bindings.
 
 Your task is to modify the RBAC configuration as follows:
 
-Prevent the ci-bot service account from binding to any role that has "admin" or "cluster-admin" in its name.
+- Prevent the ci-bot service account from binding to any role that has "admin" or "cluster-admin" in its name.
+- Ensure that the service account retains its current permissions within the ci-cd namespace.
+- Apply this restriction broadly across the entire cluster.
+- To achieve this, it may be necessary to delete and recreate the existing role binding with the appropriate restrictions.
 
-Ensure that the service account retains its current permissions within the ci-cd namespace.
+---
 
-Apply this restriction broadly across the entire cluster.
+### Solution
 
-To achieve this, it may be necessary to delete and recreate the existing role binding with the appropriate restrictions.
-
-Solution
-Service Account Restriction Solution
+#### Service Account Restriction Solution
 
 The current ClusterRole ci-bot-role permits the service account to create and modify role bindings, which poses a risk of privilege escalation.
 
-Solution Steps
+#### Solution Steps
 
 Remove the overly permissive ClusterRole:
 
+```bash
 kubectl delete clusterrole ci-bot-role
-
-
 Create a restricted ClusterRole that omits binding creation permissions:
 
+yaml
+Copy code
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -370,35 +371,33 @@ rules:
   resources: ["clusterrolebindings", "rolebindings"]
   verbs: ["get", "list", "watch"]
   # Note: This role does not include create, update, or patch permissions for bindings
-
-
 Apply the restricted role:
 
+bash
+Copy code
 kubectl apply -f - <<EOF
 [above yaml content]
 EOF
-
-
 Verify standard operations (expected result: "yes"):
 
+bash
+Copy code
 kubectl auth can-i get pods \
   --as=system:serviceaccount:ci-cd:ci-bot
 
 kubectl auth can-i create deployments \
   --as=system:serviceaccount:ci-cd:ci-bot
-
-
 Verify binding restrictions (expected result: "no"):
 
+bash
+Copy code
 kubectl auth can-i create clusterrolebindings \
   --as=system:serviceaccount:ci-cd:ci-bot
 
 kubectl auth can-i create rolebindings \
   --as=system:serviceaccount:ci-cd:ci-bot
-
 6️⃣ Enforce Read-Only Root Filesystem
 Task
-
 A deployment named data-processor in the immutable-apps namespace is currently at risk of file system attacks due to the use of a writable root filesystem.
 
 The deployment has the following volumes mounted for writable storage:
@@ -423,13 +422,12 @@ Please modify the deployment as necessary and test the application's functionali
 
 Solution
 Read-Only Root Filesystem Solution
-
 Objective: Enable a read-only root filesystem while ensuring full functionality of the application.
 
-Step 1: Patch the Deployment
+Step 1: Patch the deployment to enable readOnlyRootFilesystem:
 
-Enable readOnlyRootFilesystem:
-
+bash
+Copy code
 kubectl patch deployment data-processor -n immutable-apps -p '{
   "spec": {
     "template": {
@@ -446,33 +444,31 @@ kubectl patch deployment data-processor -n immutable-apps -p '{
     }
   }
 }'
+Step 2: Wait for the rollout to complete:
 
-Step 2: Wait for Rollout Completion
+bash
+Copy code
 kubectl rollout status deployment/data-processor -n immutable-apps
+Step 3: Test writable directories:
 
-Step 3: Test Writable Directories
+Expected to succeed:
 
-Expected to succeed – writing to mounted volumes:
+bash
+Copy code
+kubectl exec -n immutable-apps <pod-name> -- sh -c "echo 'test' > /tmp/testfile"
+kubectl exec -n immutable-apps <pod-name> -- sh -c "echo 'log' > /var/log/nginx/test.log"
+Expected to fail:
 
-kubectl exec -n immutable-apps <pod-name> -- \
-  sh -c "echo 'test' > /tmp/testfile"
+bash
+Copy code
+kubectl exec -n immutable-apps <pod-name> -- sh -c "echo 'fail' > /etc/testfile"
+Step 4: Test application functionality:
 
-kubectl exec -n immutable-apps <pod-name> -- \
-  sh -c "echo 'log' > /var/log/nginx/test.log"
-
-
-Expected to fail – writing to root filesystem:
-
-kubectl exec -n immutable-apps <pod-name> -- \
-  sh -c "echo 'fail' > /etc/testfile"
-
-Step 4: Test Application Functionality
-kubectl exec -n immutable-apps <pod-name> -- \
-  wget -q -O - http://127.0.0.1:80
-
+bash
+Copy code
+kubectl exec -n immutable-apps <pod-name> -- wget -q -O - http://127.0.0.1:80
 7️⃣ Convert Dockerfile to Distroless Base Image
 Task
-
 A Dockerfile at /opt/course/image/api-server.Dockerfile is currently using a full Ubuntu base image with unnecessary packages that increase the attack surface.
 
 Convert the Dockerfile to use a minimal distroless base image by:
@@ -489,14 +485,12 @@ Using the exec form for ENTRYPOINT
 
 Do not add any new lines – only modify existing ones
 
-The application binary is a Go binary that listens on port 8080
-
 Solution
 Minimal Base Images Solution
+Original Dockerfile:
 
-Convert the Dockerfile from an Ubuntu base image to a distroless base image.
-
-Original Dockerfile
+dockerfile
+Copy code
 FROM ubuntu:20.04
 RUN apt-get update && apt-get install -y curl wget python3 python3-pip
 RUN useradd -m appuser
@@ -504,24 +498,26 @@ COPY ./app-server /app/server
 RUN chmod +x /app/server
 USER root
 ENTRYPOINT /app/server
+Secure Dockerfile:
 
-Secure Dockerfile
+dockerfile
+Copy code
 FROM gcr.io/distroless/base
 COPY ./app-server /app/server
 USER nonroot:nonroot
 ENTRYPOINT ["/app/server"]
+Apply the changes:
 
-Apply the Changes
+bash
+Copy code
 cat > /opt/course/image/api-server.Dockerfile <<'EOF'
 FROM gcr.io/distroless/base
 COPY ./app-server /app/server
 USER nonroot:nonroot
 ENTRYPOINT ["/app/server"]
 EOF
-
 8️⃣ Reduce Linux Capabilities & Generate Kubesec Report
 Task
-
 A pod definition file at /root/CKS/data-processor.yaml has excessive Linux capabilities that pose a security risk.
 
 Secure the pod by:
@@ -534,61 +530,53 @@ Ensuring the pod can still bind to port 8080
 
 Generating a kubesec scan report after fixing the pod
 
-Once done, generate the report again and save it to
-/root/CKS/capabilities-report.txt
+Once done, generate the report again and save it to /root/CKS/capabilities-report.txt
 
 Solution
 Capabilities Reduction Solution
+Original Pod Capabilities:
 
-The current pod possesses excessive Linux capabilities that must be restricted in accordance with the principle of least privilege.
+NET_ADMIN
 
-Observed Original Pod Capabilities
+SYS_ADMIN
 
-NET_ADMIN (network administration)
+NET_RAW
 
-SYS_ADMIN (system administration)
+SYS_PTRACE
 
-NET_RAW (raw network access)
+Secure Configuration:
 
-SYS_PTRACE (process debugging)
-
-Secure Configuration
+yaml
+Copy code
 securityContext:
   capabilities:
     drop:
     - ALL
     add:
     - NET_BIND_SERVICE
+Apply the changes:
 
-Apply the Changes
-
-Delete and recreate the pod:
-
+bash
+Copy code
 kubectl delete pod data-processor-1 --force --grace-period=0
 kubectl create -f /root/CKS/data-processor.yaml
+Verify:
 
-
-Verify pod status:
-
+bash
+Copy code
 kubectl get pod data-processor-1
-
-
-Check applied capabilities:
-
 kubectl get pod data-processor-1 \
   -o jsonpath='{.spec.containers[0].securityContext.capabilities}' | jq
+Test:
 
-
-Test pod functionality:
-
-kubectl exec data-processor-1 -- \
-  wget -q -O - http://127.0.0.1:8080
-
-
+bash
+Copy code
+kubectl exec data-processor-1 -- wget -q -O - http://127.0.0.1:8080
 Generate kubesec report:
 
-kubesec scan /root/CKS/data-processor.yaml \
-  > /root/CKS/capabilities-report.txt
+bash
+Copy code
+kubesec scan /root/CKS/data-processor.yaml > /root/CKS/capabilities-report.txt
 
 9. The financial-apps namespace contains sensitive financial applications that require strict security controls.
 
