@@ -1,7 +1,7 @@
 🛡️ Kubernetes Security Tasks & Solutions
 ## 1️⃣ Crypto-Mining Detection Using Falco
 
-A pod in the crypto-monitor namespace is suspected of running crypto-mining software.
+`A pod in the crypto-monitor namespace is suspected of running crypto-mining software.
 Create a Falco rule that detects the execution of known mining processes like xmrig, minerd, or cpuminer.
 
 The rule should be added to /etc/falco/falco_rules.local.yaml with below specs:
@@ -20,7 +20,7 @@ Tag the events with:
 [container, crypto_mining, mitre_execution]
 
 
-Make sure the rule persists across Falco updates by adding it to the local rules file.
+Make sure the rule persists across Falco updates by adding it to the local rules file.**
 
 ### Solution
 Crypto Mining Detection Solution
@@ -118,11 +118,11 @@ EOF
 ```
 
 This policy operates based on the following principles:
-
+```
 podSelector: {} – This selector applies to all pods within the namespace.
 
 policyTypes: [Egress] – This configuration only impacts outgoing traffic.
-
+```
 The ipBlock with the except clause permits all traffic except for the specified malicious ranges.
 
 Testing the Policy
@@ -139,8 +139,7 @@ kubectl exec -n threat-prevention test-pod -- \
   curl --connect-timeout 3 http://192.168.100.10
 ```
 
-3️⃣ Prevent Privilege Escalation in Pod Security Context
-Task
+## 3️⃣ Prevent Privilege Escalation in Pod Security Context
 
 A pod named secure-app in the security-context namespace is currently running with excessive privileges.
 The container is capable of escalating privileges and executing as the root user, which presents a significant security risk.
@@ -161,18 +160,18 @@ Ensure that the pod remains capable of serving web content on port 8080
 
 You may need to delete and recreate the pod with the appropriate security context
 
-Solution
+### Solution
 Privilege Escalation Prevention Solution
 
 To secure the pod and prevent privilege escalation, follow these steps:
 
 Delete the existing insecure pod:
-
+```
 kubectl delete pod secure-app -n security-context --force --grace-period=0
-
+```
 
 Create a new pod with the appropriate security context:
-
+```
 apiVersion: v1
 kind: Pod
 metadata:
@@ -194,33 +193,34 @@ spec:
       runAsGroup: 101
     ports:
     - containerPort: 8080  # Non-privileged port
-
+```
 
 Apply the secure configuration:
-
+```
 kubectl apply -f - <<EOF
 [above yaml content]
 EOF
-
+```
 
 Check the security context:
-
+```
 kubectl get pod secure-app -n security-context \
   -o jsonpath='{.spec.containers[0].securityContext}' | jq
-
+```
 
 Verify the non-root user:
-
+```
 kubectl exec -n security-context secure-app -- whoami
-
+```
 
 Test pod functionality:
-
+```
 kubectl exec -n security-context secure-app -- \
   wget -q -O - http://127.0.0.1:8080
+```
 
-4️⃣ Frontend Ingress NetworkPolicy
-Task
+
+## 4️⃣ Frontend Ingress NetworkPolicy
 
 The web-apps namespace contains a frontend application that should only be accessible from specific sources.
 
@@ -246,7 +246,7 @@ Solution
 Network Policy for Ingress Control Solution
 
 Create a NetworkPolicy to manage ingress traffic directed to the frontend pods.
-
+```
 NetworkPolicy Definition
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -270,31 +270,33 @@ spec:
     ports:
     - protocol: TCP
       port: 80
-
+```
 
 To apply the NetworkPolicy, execute the following command:
-
+```
 kubectl apply -f - <<EOF
 [insert the above YAML content here]
 EOF
-
+```
 Verification Commands
+```
 kubectl get networkpolicy -n web-apps
 kubectl describe networkpolicy frontend-access -n web-apps
-
+```
 
 To test connectivity, execute the following script:
-
+```
 cd /root
 ./q4-check.sh
-
+```
 Expected Output
+```
 Detected Pods:
   Frontend: frontend-7996796dbf-vgr49
   Backend: backend-77f8b6986-l5hpd
   External: external-client-7c487fdcf-9t2lh
   Frontend Service IP: 10.106.25.81
-
+```
 1. Checking NetworkPolicy:
 NAME              POD-SELECTOR   AGE
 frontend-access   app=frontend   31s
@@ -352,9 +354,10 @@ Remove the overly permissive ClusterRole:
 
 ```bash
 kubectl delete clusterrole ci-bot-role
+```
 Create a restricted ClusterRole that omits binding creation permissions:
 
-yaml
+```yaml
 Copy code
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -371,17 +374,18 @@ rules:
   resources: ["clusterrolebindings", "rolebindings"]
   verbs: ["get", "list", "watch"]
   # Note: This role does not include create, update, or patch permissions for bindings
+``
+
 Apply the restricted role:
 
-bash
-Copy code
+```bash
 kubectl apply -f - <<EOF
 [above yaml content]
 EOF
+```
 Verify standard operations (expected result: "yes"):
 
-bash
-Copy code
+```bash
 kubectl auth can-i get pods \
   --as=system:serviceaccount:ci-cd:ci-bot
 
@@ -389,26 +393,26 @@ kubectl auth can-i create deployments \
   --as=system:serviceaccount:ci-cd:ci-bot
 Verify binding restrictions (expected result: "no"):
 
-bash
-Copy code
 kubectl auth can-i create clusterrolebindings \
   --as=system:serviceaccount:ci-cd:ci-bot
 
 kubectl auth can-i create rolebindings \
   --as=system:serviceaccount:ci-cd:ci-bot
-6️⃣ Enforce Read-Only Root Filesystem
-Task
+```
+
+## 6️⃣ Enforce Read-Only Root Filesystem
+
 A deployment named data-processor in the immutable-apps namespace is currently at risk of file system attacks due to the use of a writable root filesystem.
 
 The deployment has the following volumes mounted for writable storage:
 
-/tmp
+- /tmp
 
-/var/log
+- /var/log
 
-/var/cache/nginx
+- /var/cache/nginx
 
-/var/run
+- /var/run
 
 Your task is to:
 
@@ -420,14 +424,13 @@ Confirm that the nginx web server remains operational
 
 Please modify the deployment as necessary and test the application's functionality
 
-Solution
+### Solution
 Read-Only Root Filesystem Solution
 Objective: Enable a read-only root filesystem while ensuring full functionality of the application.
 
 Step 1: Patch the deployment to enable readOnlyRootFilesystem:
 
-bash
-Copy code
+```bash
 kubectl patch deployment data-processor -n immutable-apps -p '{
   "spec": {
     "template": {
@@ -444,31 +447,34 @@ kubectl patch deployment data-processor -n immutable-apps -p '{
     }
   }
 }'
+```
 Step 2: Wait for the rollout to complete:
 
-bash
-Copy code
+```bash
 kubectl rollout status deployment/data-processor -n immutable-apps
+```
 Step 3: Test writable directories:
 
 Expected to succeed:
 
-bash
-Copy code
+```bash
+
 kubectl exec -n immutable-apps <pod-name> -- sh -c "echo 'test' > /tmp/testfile"
 kubectl exec -n immutable-apps <pod-name> -- sh -c "echo 'log' > /var/log/nginx/test.log"
+```
 Expected to fail:
 
-bash
-Copy code
+```bash
 kubectl exec -n immutable-apps <pod-name> -- sh -c "echo 'fail' > /etc/testfile"
+```
 Step 4: Test application functionality:
 
-bash
-Copy code
+```bash
 kubectl exec -n immutable-apps <pod-name> -- wget -q -O - http://127.0.0.1:80
-7️⃣ Convert Dockerfile to Distroless Base Image
-Task
+```
+
+## 7️⃣ Convert Dockerfile to Distroless Base Image
+
 A Dockerfile at /opt/course/image/api-server.Dockerfile is currently using a full Ubuntu base image with unnecessary packages that increase the attack surface.
 
 Convert the Dockerfile to use a minimal distroless base image by:
@@ -485,12 +491,11 @@ Using the exec form for ENTRYPOINT
 
 Do not add any new lines – only modify existing ones
 
-Solution
+## Solution
 Minimal Base Images Solution
 Original Dockerfile:
 
-dockerfile
-Copy code
+```dockerfile
 FROM ubuntu:20.04
 RUN apt-get update && apt-get install -y curl wget python3 python3-pip
 RUN useradd -m appuser
@@ -498,26 +503,28 @@ COPY ./app-server /app/server
 RUN chmod +x /app/server
 USER root
 ENTRYPOINT /app/server
+```
 Secure Dockerfile:
 
-dockerfile
-Copy code
+```dockerfile
 FROM gcr.io/distroless/base
 COPY ./app-server /app/server
 USER nonroot:nonroot
 ENTRYPOINT ["/app/server"]
+```
 Apply the changes:
 
-bash
-Copy code
+```bash
 cat > /opt/course/image/api-server.Dockerfile <<'EOF'
 FROM gcr.io/distroless/base
 COPY ./app-server /app/server
 USER nonroot:nonroot
 ENTRYPOINT ["/app/server"]
 EOF
-8️⃣ Reduce Linux Capabilities & Generate Kubesec Report
-Task
+```
+
+## 8️⃣ Reduce Linux Capabilities & Generate Kubesec Report
+
 A pod definition file at /root/CKS/data-processor.yaml has excessive Linux capabilities that pose a security risk.
 
 Secure the pod by:
@@ -532,7 +539,7 @@ Generating a kubesec scan report after fixing the pod
 
 Once done, generate the report again and save it to /root/CKS/capabilities-report.txt
 
-Solution
+### Solution
 Capabilities Reduction Solution
 Original Pod Capabilities:
 
@@ -546,39 +553,40 @@ SYS_PTRACE
 
 Secure Configuration:
 
-yaml
-Copy code
+```yaml
+
 securityContext:
   capabilities:
     drop:
     - ALL
     add:
     - NET_BIND_SERVICE
+```
 Apply the changes:
 
-bash
-Copy code
+```bash
 kubectl delete pod data-processor-1 --force --grace-period=0
 kubectl create -f /root/CKS/data-processor.yaml
+```
 Verify:
 
-bash
-Copy code
+```bash
 kubectl get pod data-processor-1
 kubectl get pod data-processor-1 \
   -o jsonpath='{.spec.containers[0].securityContext.capabilities}' | jq
+```
 Test:
 
-bash
-Copy code
+```bash
 kubectl exec data-processor-1 -- wget -q -O - http://127.0.0.1:8080
+```
 Generate kubesec report:
 
-bash
-Copy code
+```bash
 kubesec scan /root/CKS/data-processor.yaml > /root/CKS/capabilities-report.txt
+```
 
-9. The financial-apps namespace contains sensitive financial applications that require strict security controls.
+## 9. The financial-apps namespace contains sensitive financial applications that require strict security controls.
 
 Configure Pod Security Admission to:
 
@@ -589,25 +597,25 @@ Label the namespace appropriately for the PSA controller
 Verify that the configuration is working by attempting to create a privileged pod and observing the rejection.
 
 
-Solution
+## Solution
 Pod Security Admission Solution
 Configure Pod Security Admission to enforce the restricted policy on the financial-apps namespace:
 
 Apply PSA Labels to the Namespace:
-
+```bash
 kubectl label namespace financial-apps \
   pod-security.kubernetes.io/enforce=restricted \
   pod-security.kubernetes.io/enforce-version=latest \
   pod-security.kubernetes.io/warn=baseline \
   pod-security.kubernetes.io/warn-version=latest \
   --overwrite
-
+```
 Verify Configurations:
-
+```bash
 kubectl get namespace financial-apps --show-labels
-
+```
 Test PSA Enforcement:
-
+```yaml
 # vi privileged-pod.yaml
 apiVersion: v1
 kind: Pod
@@ -622,15 +630,16 @@ spec:
     securityContext:
       privileged: true
       runAsUser: 0
-
+```
 Apply and Observe Rejection:
-
+```
 kubectl apply -f privileged-pod.yaml
+```
 # Expected output: "forbidden: violates Pod Security Standard"
 
 
 
-10. A security audit identified that containers in the secure-runtime namespace could be vulnerable to process debugging attacks. There is already a pod named secure-app running in this namespace.
+## 10. A security audit identified that containers in the secure-runtime namespace could be vulnerable to process debugging attacks. There is already a pod named secure-app running in this namespace.
 
 Your task is to:
 
@@ -649,9 +658,11 @@ Note: You may need to restart or recreate the pod to apply the seccomp profile c
 
 
 
-Solution
+### Solution
+
 Syscall Filtering with Seccomp Solution
 Create the custom seccomp profile:
+```
 cat > /var/lib/kubelet/seccomp/profiles/block-debug.json <<'EOF'
 {
     "defaultAction": "SCMP_ACT_ALLOW",
@@ -666,13 +677,14 @@ cat > /var/lib/kubelet/seccomp/profiles/block-debug.json <<'EOF'
     ]
 }
 EOF
-
+```
 Apply the seccomp profile to the existing pod:
 Since it is not possible to modify a running pod's security context directly, the pod must be recreated:
-
+```
 # Delete the existing pod
 kubectl delete pod secure-app -n secure-runtime
-
+```
+```yaml
 # Create a new pod with the seccomp profile
 kubectl apply -f - <<'EOF'
 apiVersion: v1
@@ -691,10 +703,10 @@ spec:
     ports:
     - containerPort: 80
 EOF
+```
 
 
-
-11. A deployment named fruits in the namespace salad has three containers:
+## 11. A deployment named fruits in the namespace salad has three containers:
 
 apple
 banana
@@ -708,33 +720,33 @@ Save the output in ~/bugged-fruit.spdx. Save the container name in ~/bugged-cont
 Note: bom and all its required dependencies are already installed.
 
 
-Solution
+### Solution
 First, check the deployments running in the salad namespace by executing the following command:
-
+```
 kubectl get deployments -n salad
-
+```
 Next, run the following command in succession to fetch the container name and save it to a text file:
-
+```
 kubectl exec -n salad fruits-<string> -c apple -- apk info | grep curl && echo apple > ~/bugged-container.txt
-
+```
 Please repeat this process for both the kiwi and banana containers.
 
 To determine the image name used in the container, describe the pod and check the Containers section in the output using the command:
-
+```
 kubectl describe pod fruits-54665c68db-mcwg9 -n salad
-
+```
 Note that your pod name may vary.
 
 After identifying the image name, navigate to the /root/ImageTarballs/ directory to locate the tarball associated with that image.
 
 Finally, execute the following command to generate the SPDX JSON:
-
+```
 bom generate --image-archive /root/ImageTarballs/<image_name>.tar --format json --output ~/bugged-fruit.spdx
-
+```
 Ensure to replace <image_name> with the actual name of the tar file.
 
 
-12. The secure-web namespace contains a web application deployment secure-app exposed by a service of the same name.
+## 12. The secure-web namespace contains a web application deployment secure-app exposed by a service of the same name.
 
 Create an ingress resource named secure-ingress with the following security requirements:
 
@@ -751,12 +763,12 @@ Note: The ingress-nginx controller uses NodePorts for external access. Use the c
 
 
 
-Solution
+### Solution
 Use kubectl get svc ingress-nginx-controller -n ingress-nginx to find the correct NodePort for HTTPS.
 
 Ingress with TLS Solution
 Create the ingress resource with TLS configuration and security annotations:
-
+```
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -782,30 +794,30 @@ spec:
             name: secure-app
             port:
               number: 80
-
+```
 Verification
 Ensure that ingress pods are healthy. Check the ingress status and TLS configuration using the following commands:
-
+```
 kubectl get ingress secure-ingress -n secure-web
 kubectl describe ingress secure-ingress -n secure-web
-
+```
 Verify Annotations
 To confirm that the annotations are set correctly, execute the following command:
-
+```
 kubectl get ingress secure-ingress -n secure-web -o jsonpath='{.metadata.annotations}'
-
+```
 Test the Ingress
 First, find the NodePort assigned to the ingress controller for HTTPS:
-
+```
 NODE_PORT=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
 echo "HTTPS NodePort: $NODE_PORT"
-
+```
 HTTPS Test: This should succeed.
-
+```
 curl -k -H "Host: secure-app.company.com" https://localhost:$NODE_PORT/
-
+```
 Expected output:
-
+```
 <!DOCTYPE html>
 <html>
 <head>
@@ -829,19 +841,19 @@ Commercial support is available at
 <p><em>Thank you for using nginx.</em></p>
 </body>
 </html>
-
+```
 HTTP Test: This should redirect to HTTPS (308 redirect).
-
+```
 HTTP_PORT=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
 curl -v -H "Host: secure-app.company.com" http://localhost:$HTTP_PORT/
-
+```
 Expected: Should show a 308 redirect to HTTPS.
 
 Alternative test using the actual service:
-
+```
 # Get the ingress controller service details
 kubectl get svc ingress-nginx-controller -n ingress-nginx
-
+```
 # The output will show the actual NodePorts assigned, for example:
 # NAME                       TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE
 # ingress-nginx-controller   NodePort   10.96.123.456   <none>        80:30080/TCP,443:30443/TCP   5m
@@ -850,7 +862,7 @@ kubectl get svc ingress-nginx-controller -n ingress-nginx
 # curl -k -H "Host: secure-app.company.com" https://localhost:30443/
 
 
-13. The external-services namespace contains applications that need controlled access to external APIs and services.
+## 13. The external-services namespace contains applications that need controlled access to external APIs and services.
 
 Create a NetworkPolicy that:
 
@@ -863,12 +875,12 @@ Applies to all pods in the external-services namespace
 The policy should be named restrict-egress and should use CIDR blocks for the allowed destinations.
 
 
-Solution
+## Solution
 Egress Network Policy Solution
 Create a NetworkPolicy to restrict egress traffic from the external-services namespace.
 
 NetworkPolicy Definition:
-
+```
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -896,9 +908,9 @@ spec:
     to:
     - ipBlock:
         cidr: 192.168.100.0/24
-
+```
 Apply the policy with the following command:
-
+```
 kubectl apply -f - <<EOF
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -925,7 +937,7 @@ spec:
     - ipBlock:
         cidr: 192.168.100.0/24
 EOF
-
+```
 Policy Explanation:
 
 podSelector: {} applies to all pods in the namespace.
@@ -934,12 +946,13 @@ DNS Access: Allows UDP and TCP traffic on port 53 to any destination.
 HTTPS Access: Allows TCP traffic on port 443 to any destination for secure web traffic.
 Custom API: Allows TCP traffic on port 8443 to the specific CIDR block 192.168.100.0/24.
 Implicit Deny: All other egress traffic is blocked by default.
+
 Testing the Policy:
 You can execute the following script to test the policy functionality:
-
+```
 cd /root
 ./q13_check.sh
-
+```
 Expected output :
 
 === Comprehensive NetworkPolicy Test ===
@@ -959,7 +972,7 @@ Summary: DNS and HTTPS allowed, other ports blocked - POLICY WORKING CORRECTLY!
 
 
 
-14. The namespace encrypted has two applications, alpha and beta.
+## 14. The namespace encrypted has two applications, alpha and beta.
 
 Since these applications handle critical communications, enforce strict mTLS using Istio in the encrypted namespace.
 
@@ -968,18 +981,18 @@ Make sure that the workloads have the istio sidecar injected.
 Note: istio and istioctl have already been installed for you.
 
 
-Solution
+### Solution
 To begin, enable Istio sidecar injection in the designated namespace by executing the following command:
-
+```
 kubectl label namespace encrypted istio-injection=enabled --overwrite
-
+```
 Next, proceed to restart the deployments with the following commands:
-
+```
 kubectl rollout restart deployment alpha -n encrypted
 kubectl rollout restart deployment beta -n encrypted
-
+```
 Now, apply the PeerAuthentication policy to enforce STRICT mTLS by running the command below:
-
+```
 cat <<EOF | kubectl apply -f -
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
@@ -990,59 +1003,57 @@ spec:
   mtls:
     mode: STRICT
 EOF
-
+```
 After that, check for sidecar injection by using this command:
-
+```
 kubectl describe pod -n encrypted alpha-6dc74c94df-8qwfj 
-
+```
 At this point, you should observe two containers running within the alpha and beta pods.
 
 Finally, verify the peer authentication by executing:
-
+```
 kubectl get peerauthentication -n encrypted
-
+```
 You should see a resource named default.
 
 
-15. In the namespace code, create a TLS secret code-secret with the following certificate and key provided:
+## 15. In the namespace code, create a TLS secret code-secret with the following certificate and key provided:
 
 cert: /root/custom-cert.crt
 key: /root/custom-key.key
 Attach that secret as a volume named secret-volume in the deployment code-server.
 
 
-Solution
+### Solution
 First, create the TLS secret by executing the following command:
-
+```
 kubectl create secret tls code-secret \
   --cert=/root/custom-cert.crt \
   --key=/root/custom-key.key \
   -n code
-
+```
 Next, edit the deployment to mount the secret:
-
+```
 kubectl edit deployment code-server -n code
-
+```
 In the spec.template.spec section, add the following configuration:
-
+```
 volumes:
 - name: secret-volume
   secret:
     secretName: code-secret
-
+```
 Within the spec.template.spec.containers section, incorporate the volume mount as follows:
-
+```
 volumeMounts:
 - name: secret-volume
   mountPath: /etc/code/tls
   readOnly: true
-
+```
 After making these changes, save and exit the deployment.
 
 
-16. Run a CIS Benchmark scan using kube-bench and fix the etcd data directory permission issue.
-
-Tasks:
+## 16. Run a CIS Benchmark scan using kube-bench and fix the etcd data directory permission issue.
 
 Run kube-bench to scan the master components
 Identify the etcd data directory permission violations
@@ -1055,11 +1066,12 @@ Verify that the fix resolves the violation
 kube-bench is pre-installed. Focus on finding and fixing the etcd data directory permission issue specifically. Note: You may need to apply permissions recursively to ALL possible etcd directories and their contents.
 
 
-Solution
+### Solution
 CIS Benchmark etcd Permission Fix
 Step 1: Run CIS Benchmark Scan
+```
 kube-bench run --targets master
-
+```
 Step 2: Identify the etcd Permission Issue
 Look for output like this in the scan results:
 
@@ -1068,6 +1080,7 @@ Look for output like this in the scan results:
 
 Step 3: Comprehensive etcd Directory Permission Fix
 # Create etcd user/group if they don't exist
+```
 groupadd etcd 2>/dev/null || true
 useradd -r -g etcd -s /bin/false etcd 2>/dev/null || true
 
@@ -1091,16 +1104,20 @@ if [ -d "/var/lib/etcd/member" ]; then
     find /var/lib/etcd/member -type f -exec chmod 600 {} \;
     chown -R etcd:etcd /var/lib/etcd/member
 fi
+```
 
 Step 4: Verify the Fix
+```
 # Check current permissions (should show drwx------ for all directories)
 echo "=== Current etcd permissions ==="
 ls -ld /var/lib/etcd
 find /var/lib/etcd -type d -exec ls -ld {} \; 2>/dev/null | head -10
-
+```
+```
 # Run kube-bench again to verify the fix
 kube-bench run --targets master --check 1.1.11,1.1.12
-
+```
+```
 # Check if both tests pass
 kube-bench run --targets master 2>/dev/null | grep -E "1.1.1[12]" | grep PASS
 
@@ -1116,7 +1133,8 @@ find / -name "*etcd*" -type d 2>/dev/null | grep -E "(var/lib|etc/kubernetes)" |
         chown -R etcd:etcd "$dir" 2>/dev/null || true
     fi
 done
-
+```
+```
 # Restart kubelet
 systemctl start kubelet 2>/dev/null || true
 
@@ -1125,3 +1143,4 @@ sleep 10
 
 # Final verification
 kube-bench run --targets master --check 1.1.11,1.1.12
+```
