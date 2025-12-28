@@ -853,14 +853,14 @@ Alternative test using the actual service:
 ```
 # Get the ingress controller service details
 kubectl get svc ingress-nginx-controller -n ingress-nginx
-```
+
 # The output will show the actual NodePorts assigned, for example:
 # NAME                       TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE
 # ingress-nginx-controller   NodePort   10.96.123.456   <none>        80:30080/TCP,443:30443/TCP   5m
 
 # In this example, use:
 # curl -k -H "Host: secure-app.company.com" https://localhost:30443/
-
+```
 
 ## 13. The external-services namespace contains applications that need controlled access to external APIs and services.
 
