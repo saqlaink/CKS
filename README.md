@@ -22,3 +22,6 @@ crictl config --set image-endpoint=unix:///run/containerd/containerd.sock # Set 
 
 
 
+There was one question about tls that you need to delete some tls protocol between kube API server and etcd.
+
+Passing Parameters to kubelet through systemd unit file.
