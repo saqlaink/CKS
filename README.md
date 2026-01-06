@@ -30,4 +30,29 @@ Add below in API server file
 ```
 </details>
 
-Passing Parameters to kubelet through systemd unit file.
+<details>
+<summary>Passing Parameters to kubelet through systemd unit file.</summary>
+
+```bash
+sudo systemctl edit kubelet
+```
+
+Scenario 1️⃣: Add security flags
+
+```
+[Service]
+Environment="KUBELET_EXTRA_ARGS=--anonymous-auth=false --authorization-mode=Webhook"
+```
+
+Scenario 2️⃣: Override ExecStart (more control)
+```
+[Service]
+ExecStart=
+ExecStart=/usr/bin/kubelet \
+  --config=/var/lib/kubelet/config.yaml \
+  --anonymous-auth=false \
+  --authorization-mode=Webhook
+```
+
+⚠️ ExecStart= must be cleared first (empty line) — exam favorite mistake.
+</details>
