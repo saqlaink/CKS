@@ -24,7 +24,8 @@ crictl config --set image-endpoint=unix:///run/containerd/containerd.sock # Set 
 <details>
 <summary>There was one question about tls that you need to delete some tls protocol between kube API server and etcd.</summary>
 Add below in API server file
-```
+
+```bash
 --tls-min-version=VersionTLS12
 ```
 </details>
