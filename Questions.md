@@ -9,7 +9,7 @@ Commands / Steps
 Create a custom Falco rule file rule.yaml:
 
 
-
+```
 - rule: read write below /dev/mem
   desc: An attempt to read or write to /dev/mem directory
   condition: >
@@ -17,14 +17,14 @@ Create a custom Falco rule file rule.yaml:
   output: "Process %proc.name accessed /dev/mem (command=%proc.cmdline user=%user.name container=%container.id image=%container.image.repository pod_name=%k8s.pod.name namespace=%k8s.ns.name)"
   priority: WARNING
   tags: [security]
-
+```
 
 Run Falco manually with the custom rule file:
 
 
-
+```
 falco -r rule.yaml  | grep -i 'dev/mem'
-
+```
 
 Check Falco output/logs for alerts:
 
@@ -42,26 +42,26 @@ Check Falco output/logs for alerts:
 Identify the Deployment that owns the container if only container ID is available, map it back to Pod/Deployment:
 
 
-
+```
 # Using crictl to find the container
 crictl ps -id abc123
 crictl pods -id <pod_id>
 kubectl get pod -A | grep mem-hacker
-
+```
 
 Scale the Deployment replicas to 0:
 
-
+```
 
 kubectl scale deployment mem-hacker --replicas=0 -n default
-
+```
 
 Verify scaling:
 
 
-
+```
 kubectl get deploy mem-hacker -n default
-
+```
 
 Expected output:
 
@@ -118,8 +118,26 @@ open_by_handle_at: this is a rare syscall used in advanced file APIs. Falco incl
 
 </details>
 
-2. Apod with 3 containers. 3 containers are using the same Image but different tags. So I need to get the image that has a specific version of libcrypto version. And create a spdx sbom with a tool called “bom”.
-3. Remove a Linux user called “developer” from the "docker" group. And also deny tcp traffic from docker daemon. How to do this?
+<details>
+<summary>2. A pod with 3 containers. 3 containers are using the same Image but different tags. So I need to get the image that has a specific version of libcrypto version. And create a spdx sbom with a tool called “bom”.</summary>
 
+Examine each container's image to check the version of libcrypto. You can do this by pulling the image locally and inspecting it or by using the docker run command to inspect the installed packages
+```
+k get pods -n <namespace> -o yaml | grep image
+for i in <first_image> <second_image> <third_image>; do bom generate --image $i | grep libcrypto; done
+```
+</details>
+
+
+<details>
+<summary>3. Remove a Linux user called “developer” from the "docker" group. And also deny tcp traffic from docker daemon. How to do this?</summary>
+```
+sudo gpasswd -d developer docker 
+```
+ To deny tcp traffic from docker daemon you would edit the /etc/docker/daemon.json file and remove tcp host entries. Leave unix:///var/run/docker.sock in there as that allows socket communication. Then restart docker daemon and check status. 
+ ```
+ sudo systemctl restart docker
+```
+</details>
 
 https://freedium-mirror.cfd/https://medium.com/@arunmrp90/mastering-the-2025-certified-kubernetes-security-specialist-cks-exam-16-realistic-scenarios-c69a5e951a6b
