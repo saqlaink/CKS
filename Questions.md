@@ -152,4 +152,69 @@ Answer:
 ```
 </details>
 
+
+
+<details>
+<summary>Question 13
+Identify a service running on port 389, list all its open files, and remove the binary:
+
+Find the process ID (PID) of the service listening on port 389.
+
+Store the list of all open files of the process in /candidate/13/files.txt.
+
+Locate the executable binary of the process and delete it.</summary>
+
+
+✅ Step 1: Identify the service running on port 389
+
+Port 389 is commonly LDAP, but don’t assume — find the PID.
+
+```
+sudo ss -lntp | grep :389
+
+OR
+
+sudo lsof -i :389
+```
+
+Example output:
+
+LISTEN 0 128 *:389 users:(("slapd",pid=1234,fd=7))
+
+
+📌 PID = 1234
+
+✅ Step 2: List all open files of the process
+
+Store open files:
+```
+sudo lsof -p 1234 > /candidate/13/files.txt
+```
+
+✔️ Requirement satisfied
+✔️ Do NOT filter — store all open files
+
+✅ Step 3: Locate the executable binary of the process
+```
+readlink -f /proc/1234/exe
+
+```
+Example output:
+
+/usr/sbin/slapd
+
+
+📌 This is the actual running binary
+
+✅ Step 4: Remove (delete) the binary
+```
+sudo rm -f /usr/sbin/slapd
+```
+
+✔️ Binary removed
+✔️ Process will terminate or break immediately
+✔️ Matches “remove the binary” exactly
+
+</details>
+
 https://freedium-mirror.cfd/https://medium.com/@arunmrp90/mastering-the-2025-certified-kubernetes-security-specialist-cks-exam-16-realistic-scenarios-c69a5e951a6b
