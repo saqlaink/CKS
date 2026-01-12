@@ -140,4 +140,15 @@ sudo gpasswd -d developer docker
 ```
 </details>
 
+<details>
+<summary>4. There is an incomplete configuration in '/etc/kubernetes/image-config' and a external image scanner server in this address: 'https://image-cks-webhook:1234'First, reconfigure the API server to enable related plugins to support the provided AdmissionConfiguration. Second, reconfigure ImagePolicyWebhook to reject images if the backend is unavailable.</summary>
+
+Answer:
+1-going to configuration folder quickly: cd /etc/kubernetes/image-config
+2- find image-config-policy file with yaml extension and quickly change this line to false:defaultAllow: true ==> False
+3- find kubeconfig in the same folder and add the server address on it
+4- copy the kube-apiserver to prevent any issue then add the following:on '--enable-admission-plugins' line add: ImagePolicyWebhook and add this flag:- -- admission-control-config-file= <address of image policy file>the volume and mount address are already configures and no need to addsave and exit and wait 1 to 2 mins for kube-apiserver to back in serviceor also you can check bysudo watch crictl ps
+
+</details>
+
 https://freedium-mirror.cfd/https://medium.com/@arunmrp90/mastering-the-2025-certified-kubernetes-security-specialist-cks-exam-16-realistic-scenarios-c69a5e951a6b
